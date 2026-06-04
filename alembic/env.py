@@ -27,7 +27,7 @@ database_url = Config.DB_CONFIG.replace(
 
 config.set_main_option(
     "sqlalchemy.url",
-    database_url
+    Config.SYNC_DB_CONFIG
 )
 
 

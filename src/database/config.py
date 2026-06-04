@@ -18,6 +18,11 @@ class Config:
         f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     )
 
+    SYNC_DB_CONFIG = (f"postgresql://"f"{DB_USER}:{DB_PASSWORD}"
+    f"@{DB_HOST}:{DB_PORT}"
+    f"/{DB_NAME}"
+)
+
     SECRET_KEY = os.getenv("SECRET_KEY","secret")
     ALGORITHM = os.getenv("ALGORITHM","HS256")
     
