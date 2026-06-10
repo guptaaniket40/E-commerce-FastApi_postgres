@@ -78,9 +78,7 @@ class OrderController:
         return success_response(
             "Orders fetched successfully",
             [
-                OrderResponse.model_validate(
-                    order
-                ).model_dump(mode="json")
+                OrderResponse.model_validate(order).model_dump(mode="json")
                 for order in orders
             ]
         )
@@ -122,9 +120,7 @@ class OrderController:
         return success_response(
             "Order fetched successfully",
             {
-                "order": OrderResponse.model_validate(
-                    order
-                ).model_dump(mode="json"),
+                "order": OrderResponse.model_validate(order).model_dump(mode="json"),
                 "items": items_data,
                 "payment": payment_data
             }

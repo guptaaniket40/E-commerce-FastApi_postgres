@@ -45,11 +45,7 @@ class AuthController:
 
         return success_response(
             "User registered successfully",
-            UserResponse.model_validate(
-                new_user
-            ).model_dump(
-                mode="json"
-            )
+            UserResponse.model_validate(new_user).model_dump(mode="json")
         )
 
     @classmethod
