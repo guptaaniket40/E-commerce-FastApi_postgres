@@ -1,75 +1,11 @@
 services:
-
-  ecommerce_db:
-
-    image: postgres:16
-
-    container_name: ecommerce_db
-
-    restart: unless-stopped
-
-    environment:
-
-      POSTGRES_USER: postgres
-
-      POSTGRES_PASSWORD: aniket123
-
-      POSTGRES_DB: EcommerceApi_NewStructure_DB
-
-    ports:
-
-      - "5433:5432"
-
-    volumes:
-
-      - ecommerce_db_data:/var/lib/postgresql/data
-
-    healthcheck:
-
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-
-      interval: 5s
-
-      timeout: 5s
-
-      retries: 5
-
-
   ecommerce_app:
-
     build: .
-
+    image: guptaaniket05/ecommerce-fastapi:latest
     container_name: ecommerce_app
-
-    restart: unless-stopped
-
-    ports:
-
-      - "8000:8000"
-
-    depends_on:
-
-      ecommerce_db:
-
-        condition: service_healthy
-
     env_file:
-
       - .env
-
-    environment:
-
-      DB_HOST: ecommerce_db
-
-      DB_PORT: 5432
-
-      DB_NAME: EcommerceApi_NewStructure_DB
-
-      DB_USER: postgres
-
-      DB_PASSWORD: aniket123
-
-
-volumes:
-
-  ecommerce_db_data:
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
