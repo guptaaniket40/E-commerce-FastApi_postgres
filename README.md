@@ -1,27 +1,25 @@
 # E-Commerce API
 
-A FastAPI-based E-Commerce Backend built using a modular company-style architecture with PostgreSQL, JWT Authentication, AWS S3, CloudFront, Alembic, and Docker.
+FastAPI-based E-Commerce Backend built with PostgreSQL, JWT Authentication, AWS S3, CloudFront, Alembic, and Docker.
 
 ## Features
 
-* User Authentication (Signup, Login, Refresh Token)
-* Product Management (CRUD Operations)
-* Cart Management
-* Order & Checkout System
+* JWT Authentication
+* Product Management (CRUD)
+* Cart & Order Management
 * Payment Module
 * AWS S3 Image Upload
-* CloudFront Image Delivery
-* Alembic Database Migrations
-* Docker & Docker Compose Support
+* CloudFront Integration
+* Alembic Migrations
+* Docker Support
 
 ## Tech Stack
 
 * FastAPI
 * PostgreSQL
 * SQLAlchemy
-* JWT Authentication
-* AWS S3
-* AWS CloudFront
+* JWT
+* AWS S3 & CloudFront
 * Alembic
 * Docker
 
@@ -34,7 +32,11 @@ docker pull guptaaniket05/ecommerce-fastapi:latest
 ## Run Project
 
 ```bash
-docker compose up --build
+docker run -d \
+--name ecommerce_app \
+--env-file .env \
+-p 8000:8000 \
+guptaaniket05/ecommerce-fastapi:latest
 ```
 
 Run migrations:
@@ -51,4 +53,4 @@ http://localhost:8000/docs
 
 ## GitHub Repository
 
-https://github.com/guptaaniket05/E-commerce-FastApi_postgres/tree/restructure-ecommerce-api
+https://github.com/guptaaniket40/E-commerce-FastApi_postgres/tree/restructure-ecommerce-api
