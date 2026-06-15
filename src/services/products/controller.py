@@ -1,6 +1,8 @@
 from fastapi import HTTPException, status
-
+from sqlalchemy import select
+from src.database.db_config import db
 from src.services.products.schema import ProductSchema
+from src.database.models import CartItem, OrderItem
 from src.services.products.serializers import ProductResponse
 from src.utils.response import success_response
 from src.utils.s3_upload import (
@@ -138,6 +140,31 @@ class ProductController:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Product not found"
             )
+
+        order_result = await db.execute(
+            select(OrderItem).where(
+                OrderItem.product_id == product.id
+            )
+        )
+
+        order_item = order_result.scalar_one_or_none()
+
+        if order_item:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Product cannot be deleted because it is already used in an order"
+            )
+
+        cart_result = await db.execute(
+            select(CartItem).where(
+                CartItem.product_id == product.id
+            )
+        )
+
+        cart_items = cart_result.scalars().all()
+
+        for cart_item in cart_items:
+            await db.delete(cart_item)
 
         if product.image_url:
             await delete_image_from_s3(
