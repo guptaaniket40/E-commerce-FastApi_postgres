@@ -29,7 +29,9 @@ class AuthController:
                 detail="Email already registered"
             )
 
-        hashed_password = await PasswordHasher.encrypt_password(user_data.password)
+        # ❌ removed await (bcrypt is sync)
+        hashed_password = PasswordHasher.encrypt_password(user_data.password)
+
         user_data.password = hashed_password
 
         new_user = await UserSchema.create_user(
@@ -56,7 +58,8 @@ class AuthController:
                 detail="Invalid email or password"
             )
 
-        valid_password = await PasswordHasher.check_password(
+        # ✅ FIXED: removed await here
+        valid_password = PasswordHasher.check_password(
             user_data.password,
             user.password
         )
