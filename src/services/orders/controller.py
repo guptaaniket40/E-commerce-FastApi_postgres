@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.services.orders.schema import OrderSchema
 from src.services.orders.serializers import OrderResponse
@@ -8,8 +9,10 @@ from src.utils.response import success_response
 class OrderController:
 
     @classmethod
-    async def checkout(cls, current_user):
+    async def checkout(cls, db: AsyncSession, current_user):
+
         cart_items = await OrderSchema.get_user_cart(
+            db=db,
             user_id=current_user.id
         )
 
@@ -19,59 +22,56 @@ class OrderController:
                 detail="Cart is empty"
             )
 
-        total_amount = 0
+      
+        total_amount = sum(
+            item.quantity * item.product.price
+            for item in cart_items
+        )
 
-        for item in cart_items:
-            total_amount += item.quantity * item.product.price
-
+ 
         new_order = await OrderSchema.create_order(
+            db=db,
             user_id=current_user.id,
             total_amount=total_amount
         )
-
-        items_data = []
-
+ 
         for item in cart_items:
             await OrderSchema.create_order_item(
+                db=db,
                 order_id=new_order.id,
                 product_id=item.product_id,
                 quantity=item.quantity,
                 price=item.product.price
             )
-
-            items_data.append({
-                "product_id": item.product_id,
-                "product_name": item.product.name,
-                "quantity": item.quantity,
-                "price": item.product.price,
-                "total": item.quantity * item.product.price
-            })
-
+ 
         payment = await OrderSchema.create_payment(
+            db=db,
             order_id=new_order.id,
             amount=total_amount
         )
-
+ 
         await OrderSchema.delete_cart_items(
+            db=db,
             cart_items=cart_items
         )
 
         return success_response(
-    "Order placed successfully",
-    {
-        "order_id": new_order.id,
-        "total_amount": new_order.total_amount,
-        "order_status": new_order.status,
-        "payment_status": payment.status,
-        "payment_method": payment.payment_method,
-        "transaction_id": payment.transaction_id,
-         
-    }
-)
+            "Order placed successfully",
+            {
+                "order_id": new_order.id,
+                "total_amount": total_amount,
+                "order_status": new_order.status,
+                "payment_status": payment.status,
+                "payment_method": payment.payment_method,
+                "transaction_id": payment.transaction_id,
+            }
+        )
 
     @classmethod
-    async def get_my_orders(cls, current_user):
+    async def get_my_orders(cls, db: AsyncSession, current_user):
+
         orders = await OrderSchema.get_order_data(
+            db=db,
             user_id=current_user.id
         )
 
@@ -84,8 +84,10 @@ class OrderController:
         )
 
     @classmethod
-    async def get_order_detail(cls, order_id, current_user):
+    async def get_order_detail(cls, db: AsyncSession, order_id, current_user):
+
         order = await OrderSchema.get_order_data(
+            db=db,
             user_id=current_user.id,
             order_id=order_id
         )
@@ -96,19 +98,18 @@ class OrderController:
                 detail="Order not found"
             )
 
-        items_data = []
-
-        for item in order.items:
-            items_data.append({
+        items_data = [
+            {
                 "product_id": item.product_id,
                 "product_name": item.product.name,
                 "quantity": item.quantity,
                 "price": item.price,
                 "total": item.quantity * item.price
-            })
+            }
+            for item in order.items
+        ]
 
         payment_data = None
-
         if order.payment:
             payment_data = {
                 "amount": order.payment.amount,

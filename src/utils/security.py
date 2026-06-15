@@ -2,9 +2,10 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.db_config import get_db
 from src.database.models import User
@@ -15,114 +16,86 @@ from src.database.jwt_config import (
     REFRESH_TOKEN_EXPIRE_DAYS
 )
 
+ 
+PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-PWD_CONTEXT = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
-
+ 
 bearer_scheme = HTTPBearer()
 
 
+ 
 class TokenHandler:
 
     @classmethod
     def create_access_token(cls, data: dict) -> str:
-        to_encode = data.copy()
+        payload = data.copy()
 
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-        )
-
-        to_encode.update({
-            "exp": expire,
+        payload.update({
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
             "type": "access"
         })
 
-        return jwt.encode(
-            to_encode,
-            SECRET_KEY,
-            algorithm=ALGORITHM
-        )
+        return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
     @classmethod
     def create_refresh_token(cls, data: dict) -> str:
-        to_encode = data.copy()
+        payload = data.copy()
 
-        expire = datetime.now(timezone.utc) + timedelta(
-            days=REFRESH_TOKEN_EXPIRE_DAYS
-        )
-
-        to_encode.update({
-            "exp": expire,
+        payload.update({
+            "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
             "type": "refresh"
         })
 
-        return jwt.encode(
-            to_encode,
-            SECRET_KEY,
-            algorithm=ALGORITHM
-        )
+        return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
     @classmethod
     def decode_token(cls, token: str):
-
         try:
-            return jwt.decode(
-                token,
-                SECRET_KEY,
-                algorithms=[ALGORITHM]
-            )
+            return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
-        except Exception:
+        except JWTError:
             raise HTTPException(
-                detail="Invalid or expired token",
-                status_code=status.HTTP_401_UNAUTHORIZED
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
             )
 
 
+ 
 class PasswordHasher:
 
     @classmethod
-    async def encrypt_password(
-        cls,
-        password: str
-    ) -> str:
-
+    def encrypt_password(cls, password: str) -> str:
         return PWD_CONTEXT.hash(password)
 
     @classmethod
-    async def check_password(
-        cls,
-        plain_password: str,
-        hashed_password: str
-    ) -> bool:
-
-        return PWD_CONTEXT.verify(
-            plain_password,
-            hashed_password
-        )
+    def check_password(cls, plain_password: str, hashed_password: str) -> bool:
+        return PWD_CONTEXT.verify(plain_password, hashed_password)
 
 
+ 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db_session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
 
     token = credentials.credentials
-
     payload = TokenHandler.decode_token(token)
 
-    user_id = payload.get("user_id")
-    token_type = payload.get("type")
-
-    if not user_id or token_type != "access":
+    if payload.get("type") != "access":
         raise HTTPException(
-            detail="Invalid token",
-            status_code=status.HTTP_401_UNAUTHORIZED
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type"
         )
 
-    result = await db_session.execute(
+    user_id = payload.get("user_id")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload"
+        )
+
+    result = await db.execute(
         select(User).where(User.id == int(user_id))
     )
 
@@ -130,8 +103,8 @@ async def get_current_user(
 
     if not user:
         raise HTTPException(
-            detail="User not found",
-            status_code=status.HTTP_401_UNAUTHORIZED
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
         )
 
     return user

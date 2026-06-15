@@ -1,17 +1,12 @@
 from sqlalchemy import select
-
 from src.database.models import User
-from src.database.db_config import db
 
 
 class UserSchema:
 
     @classmethod
-    async def get_user_data(
-        cls,
-        user_id=None,
-        email=None
-    ):
+    async def get_user_data(cls, db, user_id=None, email=None):
+
         query = select(User)
 
         if user_id:
@@ -21,14 +16,11 @@ class UserSchema:
             query = query.where(User.email == email)
 
         result = await db.execute(query)
-
         return result.scalar_one_or_none()
 
     @classmethod
-    async def create_user(
-        cls,
-        request
-    ):
+    async def create_user(cls, db, request):
+
         new_user = User(
             name=request.name,
             email=request.email,

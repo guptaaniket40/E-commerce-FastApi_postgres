@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.services.auth.schema import UserSchema
 from src.services.auth.serializers import (
@@ -9,37 +10,30 @@ from src.services.auth.serializers import (
 )
 
 from src.utils.response import success_response
-
-from src.utils.security import (
-    PasswordHasher,
-    TokenHandler
-)
+from src.utils.security import PasswordHasher, TokenHandler
 
 
 class AuthController:
 
     @classmethod
-    async def signup(
-        cls,
-        user_data: UserSignupSerializer
-    ):
+    async def signup(cls, user_data: UserSignupSerializer, db: AsyncSession):
 
         existing_user = await UserSchema.get_user_data(
+            db=db,
             email=user_data.email
         )
 
         if existing_user:
-
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
 
-        user_data.password = await PasswordHasher.encrypt_password(
-            user_data.password
-        )
+        hashed_password = await PasswordHasher.encrypt_password(user_data.password)
+        user_data.password = hashed_password
 
         new_user = await UserSchema.create_user(
+            db=db,
             request=user_data
         )
 
@@ -49,17 +43,14 @@ class AuthController:
         )
 
     @classmethod
-    async def login(
-        cls,
-        user_data: UserLoginSerializer
-    ):
+    async def login(cls, user_data: UserLoginSerializer, db: AsyncSession):
 
         user = await UserSchema.get_user_data(
+            db=db,
             email=user_data.email
         )
 
         if not user:
-
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
@@ -71,7 +62,6 @@ class AuthController:
         )
 
         if not valid_password:
-
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
@@ -82,39 +72,21 @@ class AuthController:
             "email": user.email
         }
 
-        access_token = TokenHandler.create_access_token(
-            data=token_data
-        )
-
-        refresh_token = TokenHandler.create_refresh_token(
-            data=token_data
-        )
-
         return success_response(
             "Login successful",
             {
-                "access_token": access_token,
-                "refresh_token": refresh_token,
+                "access_token": TokenHandler.create_access_token(token_data),
+                "refresh_token": TokenHandler.create_refresh_token(token_data),
                 "token_type": "bearer"
             }
         )
 
     @classmethod
-    async def refresh_token(
-        cls,
-        user_data: RefreshTokenSerializer
-    ):
+    async def refresh_token(cls, user_data: RefreshTokenSerializer):
 
-        payload = TokenHandler.decode_token(
-            user_data.refresh_token
-        )
+        payload = TokenHandler.decode_token(user_data.refresh_token)
 
-        token_type = payload.get(
-            "type"
-        )
-
-        if token_type != "refresh":
-
+        if payload.get("type") != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token"
@@ -125,14 +97,10 @@ class AuthController:
             "email": payload.get("email")
         }
 
-        new_access_token = TokenHandler.create_access_token(
-            data=token_data
-        )
-
         return success_response(
             "Access token refreshed successfully",
             {
-                "access_token": new_access_token,
+                "access_token": TokenHandler.create_access_token(token_data),
                 "token_type": "bearer"
             }
         )

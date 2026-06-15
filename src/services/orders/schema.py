@@ -1,56 +1,55 @@
 import uuid
-
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.db_config import db
 from src.database.models import CartItem, Order, OrderItem, Payment
 
 
 class OrderSchema:
-
+ 
     @classmethod
-    async def get_user_cart(cls, user_id):
+    async def get_user_cart(cls, db: AsyncSession, user_id):
         result = await db.execute(
             select(CartItem)
             .options(selectinload(CartItem.product))
             .where(CartItem.user_id == user_id)
         )
-
         return result.scalars().all()
 
+     
     @classmethod
-    async def create_order(cls, user_id, total_amount):
-        new_order = Order(
+    async def create_order(cls, db: AsyncSession, user_id, total_amount):
+        order = Order(
             user_id=user_id,
             total_amount=total_amount,
             status="confirmed"
         )
 
-        db.add(new_order)
+        db.add(order)
         await db.commit()
-        await db.refresh(new_order)
+        await db.refresh(order)
+        return order
 
-        return new_order
-
+     
     @classmethod
-    async def create_order_item(cls, order_id, product_id, quantity, price):
-        new_order_item = OrderItem(
+    async def create_order_item(cls, db: AsyncSession, order_id, product_id, quantity, price):
+        item = OrderItem(
             order_id=order_id,
             product_id=product_id,
             quantity=quantity,
             price=price
         )
 
-        db.add(new_order_item)
+        db.add(item)
         await db.commit()
-        await db.refresh(new_order_item)
+        await db.refresh(item)
+        return item
 
-        return new_order_item
-
+    
     @classmethod
-    async def create_payment(cls, order_id, amount):
-        new_payment = Payment(
+    async def create_payment(cls, db: AsyncSession, order_id, amount):
+        payment = Payment(
             order_id=order_id,
             amount=amount,
             status="success",
@@ -58,21 +57,22 @@ class OrderSchema:
             transaction_id=str(uuid.uuid4())
         )
 
-        db.add(new_payment)
+        db.add(payment)
         await db.commit()
-        await db.refresh(new_payment)
+        await db.refresh(payment)
+        return payment
 
-        return new_payment
-
+   
     @classmethod
-    async def delete_cart_items(cls, cart_items):
+    async def delete_cart_items(cls, db: AsyncSession, cart_items):
         for item in cart_items:
             await db.delete(item)
 
         await db.commit()
 
+   
     @classmethod
-    async def get_order_data(cls, user_id, order_id=None):
+    async def get_order_data(cls, db: AsyncSession, user_id, order_id=None):
         query = select(Order).where(Order.user_id == user_id)
 
         if order_id:

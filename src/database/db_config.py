@@ -1,39 +1,22 @@
-from sqlalchemy.ext.asyncio import (AsyncSession,create_async_engine)
-from sqlalchemy.orm import (declarative_base,sessionmaker)
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
 from src.database.config import Config
 
-
+ 
 Base = declarative_base()
 
-
-class AsyncDatabaseSession:
-    def __init__(self):
-        self._session = None
-        self._engine = None
-
-    def __getattr__(self, name):
-        return getattr(self._session,name)
-
-    def init(self):
-
-        self._engine = create_async_engine(Config.DB_CONFIG,future=True,echo=True)
-
-        session_local = sessionmaker(
-            bind=self._engine,
-            expire_on_commit=False,
-            class_=AsyncSession
-        )
-
-        self._session = session_local()
-
-
-db = AsyncDatabaseSession()
-
-db.init()
-
-
+ 
+engine = create_async_engine(
+    Config.DB_CONFIG,
+    echo=False
+)
+ 
+SessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+ 
 async def get_db():
-    try:
-       yield db
-    finally:
-       pass
+    async with SessionLocal() as session:
+        yield session

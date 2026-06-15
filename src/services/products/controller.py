@@ -1,23 +1,20 @@
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from src.database.db_config import db
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.services.products.schema import ProductSchema
 from src.database.models import CartItem, OrderItem
 from src.services.products.serializers import ProductResponse
 from src.utils.response import success_response
-from src.utils.s3_upload import (
-    upload_base64_image_to_s3,
-    delete_image_from_s3
-)
+from src.utils.s3_upload import upload_base64_image_to_s3, delete_image_from_s3
 
 
 class ProductController:
 
+ 
     @classmethod
-    async def create_product(
-        cls,
-        product_data
-    ):
+    async def create_product(cls, db: AsyncSession, product_data):
+
         image_url = None
 
         if product_data.image_base64 and product_data.image_name:
@@ -26,92 +23,75 @@ class ProductController:
                 image_name=product_data.image_name
             )
 
-        new_product = await ProductSchema.create_product(
+        product = await ProductSchema.create_product(
+            db=db,
             request=product_data,
             image_url=image_url
         )
 
         return success_response(
             "Product created successfully",
-            ProductResponse.model_validate(
-                new_product
-            ).model_dump(
-                mode="json"
-            )
+            ProductResponse.model_validate(product).model_dump(mode="json")
         )
 
+   
     @classmethod
-    async def get_all_products(
-        cls
-    ):
-        products = await ProductSchema.get_product_data()
+    async def get_all_products(cls, db: AsyncSession):
+
+        products = await ProductSchema.get_product_data(db=db)
 
         return success_response(
             "Products fetched successfully",
             [
-                ProductResponse.model_validate(
-                    product
-                ).model_dump(
-                    mode="json"
-                )
-                for product in products
+                ProductResponse.model_validate(p).model_dump(mode="json")
+                for p in products
             ]
         )
 
+    
     @classmethod
-    async def get_product_detail(
-        cls,
-        product_id: int
-    ):
+    async def get_product_detail(cls, db: AsyncSession, product_id: int):
+
         product = await ProductSchema.get_product_data(
+            db=db,
             product_id=product_id
         )
 
         if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
+            raise HTTPException(404, "Product not found")
 
         return success_response(
             "Product fetched successfully",
-            ProductResponse.model_validate(
-                product
-            ).model_dump(
-                mode="json"
-            )
+            ProductResponse.model_validate(product).model_dump(mode="json")
         )
 
+    
     @classmethod
-    async def update_product(
-        cls,
-        product_id: int,
-        product_data
-    ):
+    async def update_product(cls, db: AsyncSession, product_id: int, product_data):
+
         product = await ProductSchema.get_product_data(
+            db=db,
             product_id=product_id
         )
 
         if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
+            raise HTTPException(404, "Product not found")
 
-        image_url = None
+        image_url = product.image_url
 
         if product_data.image_base64 and product_data.image_name:
+
+            # delete old image safely
             if product.image_url:
-                await delete_image_from_s3(
-                    product.image_url
-                )
+                await delete_image_from_s3(product.image_url)
 
             image_url = await upload_base64_image_to_s3(
                 image_base64=product_data.image_base64,
                 image_name=product_data.image_name
             )
 
-        updated_product = await ProductSchema.update_product(
+        updated = await ProductSchema.update_product(
+            db=db,
             product=product,
             request=product_data,
             image_url=image_url
@@ -119,62 +99,51 @@ class ProductController:
 
         return success_response(
             "Product updated successfully",
-            ProductResponse.model_validate(
-                updated_product
-            ).model_dump(
-                mode="json"
-            )
+            ProductResponse.model_validate(updated).model_dump(mode="json")
         )
 
+   
     @classmethod
-    async def delete_product(
-        cls,
-        product_id: int
-    ):
+    async def delete_product(cls, db: AsyncSession, product_id: int):
+
         product = await ProductSchema.get_product_data(
+            db=db,
             product_id=product_id
         )
 
         if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
-
-        order_result = await db.execute(
-            select(OrderItem).where(
+            raise HTTPException(404, "Product not found")
+ 
+        order_exists = await db.execute(
+            select(OrderItem.id).where(
                 OrderItem.product_id == product.id
-            )
+            ).limit(1)
         )
 
-        order_item = order_result.scalar_one_or_none()
-
-        if order_item:
+        if order_exists.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Product cannot be deleted because it is already used in an order"
+                detail="Product already used in orders, cannot delete"
             )
 
-        cart_result = await db.execute(
+    
+        await db.execute(
             select(CartItem).where(
                 CartItem.product_id == product.id
             )
         )
 
-        cart_items = cart_result.scalars().all()
+        cart_items = (await db.execute(
+            select(CartItem).where(CartItem.product_id == product.id)
+        )).scalars().all()
 
-        for cart_item in cart_items:
-            await db.delete(cart_item)
+        for item in cart_items:
+            await db.delete(item)
 
+   
         if product.image_url:
-            await delete_image_from_s3(
-                product.image_url
-            )
+            await delete_image_from_s3(product.image_url)
 
-        await ProductSchema.delete_product(
-            product=product
-        )
+        await ProductSchema.delete_product(db=db, product=product)
 
-        return success_response(
-            "Product deleted successfully"
-        )
+        return success_response("Product deleted successfully")
