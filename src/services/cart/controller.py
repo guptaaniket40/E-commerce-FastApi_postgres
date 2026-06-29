@@ -74,6 +74,49 @@ class CartController:
         ]
 
         return success_response("Cart fetched successfully", data)
+    
+    @classmethod
+    async def get_cart_item(cls, cart_item_id, current_user, db: AsyncSession):
+     item = await CartSchema.get_cart_item_by_id(
+        db=db,
+        cart_item_id=cart_item_id,
+        user_id=current_user.id
+    )
+     if not item:
+        raise HTTPException(status_code=404, detail="Cart item not found")
+    
+     return success_response("Cart item fetched successfully", {
+        "cart_item_id": item.id,
+        "product_id": item.product.id,
+        "product_name": item.product.name,
+        "quantity": item.quantity,
+        "price": item.product.price,
+        "total": item.quantity * item.product.price
+    })
+
+
+    @classmethod
+    async def update_cart(cls, cart_item_id, request, current_user, db: AsyncSession):
+     item = await CartSchema.get_cart_item_by_id(
+        db=db,
+        cart_item_id=cart_item_id,
+        user_id=current_user.id
+    )
+     if not item:
+        raise HTTPException(status_code=404, detail="Cart item not found")
+
+     item.quantity = request.quantity
+     await db.commit()
+     await db.refresh(item)
+
+     return success_response("Cart item updated successfully", {
+        "cart_item_id": item.id,
+        "product_id": item.product.id,
+        "product_name": item.product.name,
+        "quantity": item.quantity,
+        "price": item.product.price,
+        "total": item.quantity * item.product.price
+    })
 
     @classmethod
     async def delete_cart_item(cls, cart_item_id, current_user, db: AsyncSession):
