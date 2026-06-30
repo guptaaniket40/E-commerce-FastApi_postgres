@@ -53,4 +53,7 @@ jobs:
             echo "Cleaning unused images..."
             docker image prune -f
 
+            echo "create a alembic...."
+            docker exec ecommerce_app alembic upgrade head
+            
             echo "Deployment successful 🚀"
